@@ -372,10 +372,69 @@ cfg_if::cfg_if! {
         mod elf;
         use self::elf::Object;
 
+        pub struct Elf64_Phdr {
+            pub p_type: u32,
+            pub p_flags: u32,
+            pub p_offset: u64,
+            pub p_vaddr: u64,
+            pub p_paddr: u64,
+            pub p_filesz: u64,
+            pub p_memsz: u64,
+            pub p_align: u64,
+        }
+
+        pub struct Elf32_Phdr {
+            pub p_type: u32,
+            pub p_offset: u32,
+            pub p_vaddr: u32,
+            pub p_paddr: u32,
+            pub p_filesz: u32,
+            pub p_memsz: u32,
+            pub p_flags: u32,
+            pub p_align: u32,
+        }
+    
+        pub struct dl_phdr_info {
+            #[cfg(target_pointer_width = "64")]
+            pub dlpi_addr: u64,
+            #[cfg(target_pointer_width = "32")]
+            pub dlpi_addr: u32,
+    
+            pub dlpi_name: *const libc::c_char,
+    
+            #[cfg(target_pointer_width = "64")]
+            pub dlpi_phdr: *const Elf64_Phdr,
+            #[cfg(target_pointer_width = "32")]
+            pub dlpi_phdr: *const Elf32_Phdr,
+    
+            #[cfg(target_pointer_width = "64")]
+            pub dlpi_phnum: u16,
+            #[cfg(target_pointer_width = "32")]
+            pub dlpi_phnum: u16,
+    
+            pub dlpi_adds: libc::c_ulonglong,
+            pub dlpi_subs: libc::c_ulonglong,
+            pub dlpi_tls_modid: libc::size_t,
+            pub dlpi_tls_data: *mut libc ::c_void,
+        }
+
+        extern "C" {        
+            pub fn dl_iterate_phdr(
+                callback: Option<
+                    unsafe extern "C" fn(
+                        info: *mut dl_phdr_info,
+                        size: libc::size_t,
+                        data: *mut libc::c_void,
+                    ) -> libc::c_int,
+                >,
+                data: *mut libc::c_void,
+            ) -> libc::c_int;
+        }
+
         fn native_libraries() -> Vec<Library> {
             let mut ret = Vec::new();
             unsafe {
-                libc::dl_iterate_phdr(Some(callback), &mut ret as *mut Vec<_> as *mut _);
+                dl_iterate_phdr(Some(callback), &mut ret as *mut Vec<_> as *mut _);
             }
             return ret;
         }
@@ -383,7 +442,7 @@ cfg_if::cfg_if! {
         // `info` should be a valid pointers.
         // `vec` should be a valid pointer to a `std::Vec`.
         unsafe extern "C" fn callback(
-            info: *mut libc::dl_phdr_info,
+            info: *mut dl_phdr_info,
             _size: libc::size_t,
             vec: *mut libc::c_void,
         ) -> libc::c_int {
